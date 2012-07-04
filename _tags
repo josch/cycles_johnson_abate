@@ -1,0 +1,3 @@
+<*.ml{i,}>: debug, pp(camlp4o Camlp4MacroParser.cmo)
+<cycles_functional.*>: package(ocamlgraph), package(extlib)
+<cycles_iter.*>: package(ocamlgraph), package(extlib)
