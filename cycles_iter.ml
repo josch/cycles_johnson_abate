@@ -69,39 +69,63 @@ let find_all_cycles_johnson g =
   let module SV = Set.Make(G.V) in
   let extract_subgraph g s =
     let sg = G.create () in
-    G.iter_edges (fun v1 v2 ->
-      if SV.mem v1 s then G.add_vertex sg v1;
-      if SV.mem v2 s then G.add_vertex sg v2;
-      if SV.mem v1 s && SV.mem v2 s then
-        G.add_edge sg v1 v2
-    ) g;
+    List.iter (fun v1 ->
+      G.add_vertex sg v1;
+      List.iter (fun e ->
+        let v2 = G.E.dst e in
+        if List.mem v2 s then
+          G.add_edge_e sg e
+      ) (G.succ_e g v1)
+    ) s;
     sg
   in
  (* Johnson's algorithm requires some ordering of the nodes. 
   * They might not be sortable so we assign an arbitrary ordering. 
   *)
-  let to_set l = List.fold_right SV.add l SV.empty in
-  let vertex_set = G.fold_vertex SV.add g SV.empty in
-  let part s w = fst(SV.partition (fun e -> e >= w) s) in
-  SV.iter (fun s ->
-    (* Build the subgraph induced by s and following nodes in the ordering *)
-    let subset = SV.add s (part vertex_set s) in
-    let subgraph = extract_subgraph g subset in
-    let scc = G.Components.scc_list subgraph in
-    (* Find the strongly connected component in the subgraph
-     * that contains the least node according to the ordering *)
-    let minnode = SV.min_elt subset in
-    let mincomp = List.find (fun l -> List.mem minnode l) scc in
-    (* smallest node in the component according to the ordering *)
-    let component = extract_subgraph subgraph (to_set mincomp) in
-    if G.nb_edges component > 0 then begin
-      G.iter_vertex (fun node ->
-        Hashtbl.replace blocked node false;
-        Hashtbl.replace b node [];
-      ) component;
-      ignore(circuit minnode minnode component);
-    end
-  ) vertex_set;
+  let scc_with_vertex g v =
+    let _,scc = G.Components.scc g in
+    let n = scc v in
+    let sg = G.create () in
+    G.iter_vertex (fun v1 ->
+      if (scc v1) = n then
+        List.iter (fun e ->
+          if scc (G.E.dst e) = n then
+            G.add_edge_e sg e
+        ) (G.succ_e g v1)
+    ) g;
+    sg
+  in
+
+  let list_min = function
+    | [] -> invalid_arg "empty list"
+    | h::tl -> List.fold_left min h tl
+  in
+
+  let sort_components a b =
+    compare (list_min a) (list_min b)
+  in
+
+  let non_degenerate_scc = List.filter (fun scc -> (List.length scc) > 1) (G.Components.scc_list g) in
+
+  let non_degenerate_subgraphs = List.map
+    (fun scc -> extract_subgraph g scc)
+    (List.sort ~cmp:sort_components non_degenerate_scc)
+  in
+
+  List.iter (fun g ->
+    let vertex_set = G.fold_vertex (fun v l -> v::l) g [] in
+    List.iter (fun s ->
+      let component = scc_with_vertex g s in
+      if G.nb_edges component > 0 then begin
+        G.iter_vertex (fun node ->
+          Hashtbl.replace blocked node false;
+          Hashtbl.replace b node [];
+        ) component;
+        ignore(circuit s s component);
+      end;
+      G.remove_vertex g s;
+    ) (List.sort vertex_set);
+  ) non_degenerate_subgraphs;
 
   List.rev !result
 ;;
