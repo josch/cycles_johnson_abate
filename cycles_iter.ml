@@ -130,8 +130,8 @@ let find_all_cycles_johnson g =
   List.rev !result
 ;;
 
-if Array.length Sys.argv < 3 then begin
-  Printf.printf "usage: %s num_vertices [v1,v2...]\n" Sys.argv.(0);
+if Array.length Sys.argv != 2 then begin
+  Printf.printf "usage: echo \"v1 v2\nv1 v3\n...\" | %s num_vertices\n" Sys.argv.(0);
   exit 1;
 end;
 
@@ -140,10 +140,12 @@ let g = G.create ~size:v () in
 
 let a = Array.init v G.V.create in
 
-for i = 2 to Array.length Sys.argv - 1 do
-  let v1, v2 = String.split Sys.argv.(i) "," in
-  G.add_edge g a.(int_of_string v1) a.(int_of_string v2);
-done;
+try
+ while true do
+   let v1, v2 = String.split (read_line ()) " " in
+   G.add_edge g a.(int_of_string v1) a.(int_of_string v2);
+ done;
+with End_of_file -> ();
 
 let ll = find_all_cycles_johnson g in
 List.iter (fun path ->
